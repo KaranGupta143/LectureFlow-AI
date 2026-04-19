@@ -35,7 +35,8 @@ function extractConceptSeeds(notes: string): string[] {
 
 function localAnalyzeNotes(notes: string): AnalysisResult {
   const seeds = extractConceptSeeds(notes);
-  const concepts = (seeds.length > 0 ? seeds : [notes.slice(0, 80)]).map((seed, index) => {
+  const expandedSeeds = seeds.length > 0 ? seeds : [notes.slice(0, 80)];
+  const concepts = expandedSeeds.slice(0, 8).map((seed, index) => {
     const topic = normalizeTopic(seed, index);
     return {
       id: `concept-${index + 1}`,
@@ -180,9 +181,10 @@ export const analyzeNotes = createServerFn({ method: "POST" })
             {
               role: "user",
               content:
-                "Analyze these lecture notes. Extract the key concepts (with subtopics + a clear definition) " +
-                "and generate 5 predicted exam questions (mix of short and long answer). " +
-                "Give each concept a short 'topic' (3-6 words). Definitions should be 1-2 sentences in plain English.\n\n" +
+                  "Analyze these lecture notes. Extract 6-10 key concepts (with subtopics + a clear definition) " +
+                  "and generate 5 predicted exam questions (mix of short and long answer). " +
+                  "Give each concept a short 'topic' (3-6 words). Definitions should be 1-2 sentences in plain English. " +
+                  "Prefer more smaller concepts over fewer large ones so students can learn step by step.\n\n" +
                 "NOTES:\n" + data.notes,
             },
           ],
@@ -193,8 +195,8 @@ export const analyzeNotes = createServerFn({ method: "POST" })
               title: { type: "string", description: "A short title for this lecture (max 8 words)" },
               concepts: {
                 type: "array",
-                minItems: 3,
-                maxItems: 10,
+                  minItems: 6,
+                  maxItems: 12,
                 items: {
                   type: "object",
                   properties: {
