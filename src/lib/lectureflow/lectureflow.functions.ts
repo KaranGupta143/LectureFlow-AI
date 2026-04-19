@@ -113,7 +113,8 @@ async function runWithFallback<T>(operation: () => Promise<T>, fallback: () => T
   try {
     return await operation();
   } catch (error) {
-    const allowFallback = process.env.LECTUREFLOW_ALLOW_LOCAL_FALLBACK === "true";
+    const flag = process.env.LECTUREFLOW_ALLOW_LOCAL_FALLBACK?.toLowerCase();
+    const allowFallback = flag !== "false";
     if (!allowFallback) throw error;
     return fallback();
   }
