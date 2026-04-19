@@ -17,11 +17,25 @@ LectureFlow AI is built with TanStack Start + React and supports multiple AI pro
 
 ## Screenshots
 
-Add your project screenshots in a `docs/screenshots` folder and update the links below.
+### Step 1: Home and Notes Input
 
-![LectureFlow Home](docs/screenshots/home.png)
-![Concepts View](docs/screenshots/concepts.png)
-![Action Plan View](docs/screenshots/action-plan.png)
+![Step 1 - Home](docs/screenshots/step-1-home.png)
+
+### Step 2: Concept Extraction
+
+![Step 2 - Concepts](docs/screenshots/step-2-concepts.png)
+
+### Step 3: Predicted Questions
+
+![Step 3 - Questions](docs/screenshots/step-3-questions.png)
+
+### Step 4: Daily Action Plan
+
+![Step 4 - Action Plan](docs/screenshots/step-4-action-plan.png)
+
+### Step 5: Doubt Mode Chat
+
+![Step 5 - Doubt Mode](docs/screenshots/step-5-doubt-mode.png)
 
 ## Features
 
