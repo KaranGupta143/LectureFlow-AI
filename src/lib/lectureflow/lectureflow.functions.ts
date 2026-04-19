@@ -165,15 +165,15 @@ function localChatReply(messages: { role: "user" | "assistant"; content: string 
   const similarConcept = "a closely related concept in your syllabus";
 
   return [
-    "Topic: " + topic,
-    "1) Definition: This is the main idea in one line, written in simple words.",
-    "2) Example (" + exampleSource + "): Pick one short example and connect it directly to the definition.",
-    "3) Solve in 3 small steps:",
-    "- Step 1: Identify what is given and what is asked.",
-    "- Step 2: Apply the core rule or formula to this case.",
-    "- Step 3: Check the result in one sentence (does it make sense?).",
-    "4) Difference: Compare '" + topic + "' with " + similarConcept + " using 2-3 clear points.",
-    "5) Quick check: What is one sign that tells you this problem is about '" + topic + "'?",
+    "I think you are asking about: " + topic,
+    "1) Definition: This is the main idea in one line, in very easy English.",
+    "2) Example (" + exampleSource + "): Use one simple lecture example and connect it to the idea.",
+    "3) Small steps:",
+    "- Step 1: Identify what the concept means.",
+    "- Step 2: Apply it to the example.",
+    "- Step 3: Check why the answer is correct.",
+    "4) Difference: Compare '" + topic + "' with " + similarConcept + " in 2 short points.",
+    "5) Quick check: Can you explain '" + topic + "' in one sentence now?",
   ].join("\n");
 }
 
@@ -359,22 +359,26 @@ export const chatDoubt = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const latestUser = [...data.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+    const extractedTopic = extractTopicFromPrompt(latestUser);
     const sys =
       TEACHER_SYSTEM +
       (data.context
         ? `\n\nThe student is studying these lecture notes:\n${data.context.slice(0, 8000)}`
         : "") +
-      "\n\nDoubt mode rules:" +
-      "\n1) Answer the topic directly. Do not repeat the user's template or instructions." +
-      "\n2) Keep the answer in very easy English and use 4-6 short bullets." +
-      "\n3) Start with a 1-line definition, then 1 lecture-based example, then 3 small steps." +
-      "\n4) Add 1 short difference from a nearby concept." +
-      "\n5) End with 1 quick self-check question." +
-      "\n6) If the user asks for a simple explanation, stay focused on that one topic only.";
+      "\n\nDoubt mode behavior:" +
+      "\n- Act like a top tutoring agent: understand the question, answer directly, and keep the student moving forward." +
+      "\n- If the question is too vague, ask exactly one short clarifying question instead of repeating the template." +
+      "\n- If the topic can be inferred, use it and answer immediately." +
+      "\n- Never echo the user's instructions back to them." +
+      "\n- Prefer simple, concrete explanations over long theory." +
+      "\n- Use this format when answering: 1-line definition, one lecture example, 3 small steps, one nearby difference, one quick check question." +
+      (extractedTopic ? `\n- Inferred topic: ${extractedTopic}.` : "") +
+      "\n- Keep the tone confident, brief, and student-friendly like ChatGPT tutoring mode.";
     return runWithFallback(
       async () => ({
         reply: await callGatewayText([{ role: "system", content: sys }, ...data.messages], {
-          temperature: 0.1,
+          temperature: 0.05,
         }),
       }),
       () => ({ reply: localChatReply(data.messages, data.context) }),
