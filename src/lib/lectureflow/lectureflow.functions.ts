@@ -292,10 +292,19 @@ export const chatDoubt = createServerFn({ method: "POST" })
       TEACHER_SYSTEM +
       (data.context
         ? `\n\nThe student is studying these lecture notes:\n${data.context.slice(0, 8000)}`
-        : "");
+        : "") +
+      "\n\nDoubt mode rules:" +
+      "\n1) Answer directly in 4-8 clear bullet points when possible." +
+      "\n2) Use simple language and define technical terms in one line." +
+      "\n3) Tie every answer back to the lecture context above." +
+      "\n4) If the student asks for comparison, use a concise table-like format with key differences." +
+      "\n5) If unsure, say what is uncertain and give the most likely explanation instead of hallucinating." +
+      "\n6) End with one short self-check question to help revision.";
     return runWithFallback(
       async () => ({
-        reply: await callGatewayText([{ role: "system", content: sys }, ...data.messages]),
+        reply: await callGatewayText([{ role: "system", content: sys }, ...data.messages], {
+          temperature: 0.2,
+        }),
       }),
       () => ({ reply: localChatReply(data.messages, data.context) }),
     );

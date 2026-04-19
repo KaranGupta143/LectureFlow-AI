@@ -11,6 +11,11 @@ type AIConfig = {
   model: string;
 };
 
+type TextOptions = {
+  model?: string;
+  temperature?: number;
+};
+
 const REQUEST_TIMEOUT_MS = 20000;
 
 function resolveProvider(): Provider {
@@ -36,7 +41,7 @@ function getConfig(): AIConfig {
       provider,
       apiKey,
       url: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1/chat/completions",
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      model: process.env.OPENAI_MODEL ?? "gpt-4o",
     };
   }
 
@@ -47,7 +52,7 @@ function getConfig(): AIConfig {
       provider,
       apiKey,
       url: process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      model: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+      model: process.env.GEMINI_MODEL ?? "gemini-2.5-pro",
     };
   }
 
@@ -138,8 +143,12 @@ export async function callGatewayJSON<T>(
   return JSON.parse(toolCall.function.arguments) as T;
 }
 
-export async function callGatewayText(messages: ChatMessage[]): Promise<string> {
+export async function callGatewayText(messages: ChatMessage[], options?: TextOptions): Promise<string> {
   const cfg = getConfig();
-  const data = await postChatCompletion(cfg, { model: cfg.model, messages });
+  const data = await postChatCompletion(cfg, {
+    model: options?.model ?? cfg.model,
+    messages,
+    temperature: options?.temperature ?? 0.3,
+  });
   return extractText(data);
 }
