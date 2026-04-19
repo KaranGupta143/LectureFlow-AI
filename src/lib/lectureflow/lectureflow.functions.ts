@@ -54,7 +54,7 @@ function localAnalyzeNotes(notes: string): AnalysisResult {
   const topicList = concepts.map((concept) => concept.topic);
   const questions = topicList.slice(0, 5).map((topic, index) => ({
     question: `Explain ${topic} and describe why it matters in the lecture.`,
-    type: index % 2 === 0 ? "short" : "long",
+    type: (index % 2 === 0 ? "short" : "long") as "short" | "long",
     hint: `Focus on the definition, the main idea, and one example involving ${topic}.`,
   }));
 
@@ -103,10 +103,58 @@ function localActionPlan(notes: string, concepts: string[], revised: string[]): 
   };
 }
 
+function extractTopicFromPrompt(input: string): string {
+  const topicLine = input.match(/topic\s*:\s*([^\n]+)/i)?.[1]?.trim();
+  if (topicLine && topicLine.length > 0 && !/^\[.*\]$/.test(topicLine)) {
+    return topicLine;
+  }
+
+  const cleaned = input
+    .replace(/short\s*answer\s*:/gi, "")
+    .replace(/explain this in very easy english[^\n]*/gi, "")
+    .replace(/i\s*'?m using the lecture context[^\n]*/gi, "")
+    .replace(/start with the definition[^\n]*/gi, "")
+    .replace(/\d+\)\s*[^\n]+/g, "")
+    .replace(/\[[^\]]+\]/g, "")
+    .trim();
+
+  if (!cleaned) return "";
+  const candidate = cleaned.split(/[?.!\n]/)[0]?.trim() ?? "";
+  return candidate.length > 2 ? candidate : "";
+}
+
 function localChatReply(messages: { role: "user" | "assistant"; content: string }[], context?: string): string {
-  const latestUser = [...messages].reverse().find((message) => message.role === "user")?.content ?? "your question";
-  const contextSnippet = context?.trim() ? ` I’m using the lecture context to stay aligned with your notes.` : "";
-  return `Short answer: ${latestUser}${contextSnippet} Start with the definition, then connect it to one example from the lecture, and finish by asking yourself how it differs from nearby concepts.`;
+  const latestUser = [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const topic = extractTopicFromPrompt(latestUser);
+  const hasLectureContext = Boolean(context?.trim());
+
+  if (!topic) {
+    return [
+      "I can help in very small steps.",
+      "Please send only your exact topic name (for example: 'Photosynthesis' or 'Binary Search').",
+      "Then I will reply in this format:",
+      "1) 1-line definition",
+      "2) 1 lecture-based example",
+      "3) 3 small solution steps",
+      "4) Difference from a similar concept",
+      "5) 1 quick check question",
+    ].join("\n");
+  }
+
+  const exampleSource = hasLectureContext ? "from your lecture context" : "from a common class example";
+  const similarConcept = "a closely related concept in your syllabus";
+
+  return [
+    "Topic: " + topic,
+    "1) Definition: This is the main idea in one line, written in simple words.",
+    "2) Example (" + exampleSource + "): Pick one short example and connect it directly to the definition.",
+    "3) Solve in 3 small steps:",
+    "- Step 1: Identify what is given and what is asked.",
+    "- Step 2: Apply the core rule or formula to this case.",
+    "- Step 3: Check the result in one sentence (does it make sense?).",
+    "4) Difference: Compare '" + topic + "' with " + similarConcept + " using 2-3 clear points.",
+    "5) Quick check: What is one sign that tells you this problem is about '" + topic + "'?",
+  ].join("\n");
 }
 
 async function runWithFallback<T>(operation: () => Promise<T>, fallback: () => T): Promise<T> {
@@ -294,16 +342,16 @@ export const chatDoubt = createServerFn({ method: "POST" })
         ? `\n\nThe student is studying these lecture notes:\n${data.context.slice(0, 8000)}`
         : "") +
       "\n\nDoubt mode rules:" +
-      "\n1) Answer directly in 4-8 clear bullet points when possible." +
-      "\n2) Use simple language and define technical terms in one line." +
-      "\n3) Tie every answer back to the lecture context above." +
-      "\n4) If the student asks for comparison, use a concise table-like format with key differences." +
-      "\n5) If unsure, say what is uncertain and give the most likely explanation instead of hallucinating." +
-      "\n6) End with one short self-check question to help revision.";
+      "\n1) Answer the topic directly. Do not repeat the user's template or instructions." +
+      "\n2) Keep the answer in very easy English and use 4-6 short bullets." +
+      "\n3) Start with a 1-line definition, then 1 lecture-based example, then 3 small steps." +
+      "\n4) Add 1 short difference from a nearby concept." +
+      "\n5) End with 1 quick self-check question." +
+      "\n6) If the user asks for a simple explanation, stay focused on that one topic only.";
     return runWithFallback(
       async () => ({
         reply: await callGatewayText([{ role: "system", content: sys }, ...data.messages], {
-          temperature: 0.2,
+          temperature: 0.1,
         }),
       }),
       () => ({ reply: localChatReply(data.messages, data.context) }),

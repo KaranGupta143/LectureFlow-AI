@@ -16,6 +16,8 @@ type TextOptions = {
   temperature?: number;
 };
 
+type ProviderCandidate = AIConfig;
+
 const REQUEST_TIMEOUT_MS = 20000;
 
 function resolveProvider(): Provider {
@@ -33,7 +35,10 @@ function resolveProvider(): Provider {
 
 function getConfig(): AIConfig {
   const provider = resolveProvider();
+  return getConfigForProvider(provider);
+}
 
+function getConfigForProvider(provider: Provider): AIConfig {
   if (provider === "openai") {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
@@ -66,6 +71,29 @@ function getConfig(): AIConfig {
     url,
     model: process.env.LECTUREFLOW_AI_MODEL ?? "google/gemini-2.5-flash",
   };
+}
+
+function getProviderCandidates(): ProviderCandidate[] {
+  const orderedProviders: Provider[] = [resolveProvider(), "openai", "gemini", "gateway"];
+  const seen = new Set<Provider>();
+  const candidates: ProviderCandidate[] = [];
+
+  for (const provider of orderedProviders) {
+    if (seen.has(provider)) continue;
+    seen.add(provider);
+
+    try {
+      candidates.push(getConfigForProvider(provider));
+    } catch {
+      continue;
+    }
+  }
+
+  if (candidates.length === 0) {
+    throw new Error("No AI provider configured. Set LECTUREFLOW_AI_PROVIDER and the matching API key.");
+  }
+
+  return candidates;
 }
 
 function getErrorMessage(status: number): string {
@@ -115,13 +143,28 @@ async function postChatCompletion(cfg: AIConfig, body: Record<string, unknown>):
   }
 }
 
+async function callAcrossProviders<T>(request: (cfg: AIConfig) => Promise<T>): Promise<T> {
+  let lastError: unknown = null;
+
+  for (const cfg of getProviderCandidates()) {
+    try {
+      return await request(cfg);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("All configured AI providers failed.");
+}
+
 export async function callGatewayJSON<T>(
   messages: ChatMessage[],
   toolName: string,
   parameters: Record<string, unknown>,
 ): Promise<T> {
-  const cfg = getConfig();
-  const data = await postChatCompletion(cfg, {
+  const data = await callAcrossProviders((cfg) =>
+    postChatCompletion(cfg, {
       model: cfg.model,
       messages,
       tools: [
@@ -135,7 +178,8 @@ export async function callGatewayJSON<T>(
         },
       ],
       tool_choice: { type: "function", function: { name: toolName } },
-  });
+    }),
+  );
   const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
   if (!toolCall?.function?.arguments) {
     throw new Error("AI did not return structured output");
@@ -144,11 +188,12 @@ export async function callGatewayJSON<T>(
 }
 
 export async function callGatewayText(messages: ChatMessage[], options?: TextOptions): Promise<string> {
-  const cfg = getConfig();
-  const data = await postChatCompletion(cfg, {
-    model: options?.model ?? cfg.model,
-    messages,
-    temperature: options?.temperature ?? 0.3,
-  });
+  const data = await callAcrossProviders((cfg) =>
+    postChatCompletion(cfg, {
+      model: options?.model ?? cfg.model,
+      messages,
+      temperature: options?.temperature ?? 0.3,
+    }),
+  );
   return extractText(data);
 }
