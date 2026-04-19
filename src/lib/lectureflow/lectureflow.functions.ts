@@ -75,6 +75,25 @@ function localAnalyzeNotes(notes: string): AnalysisResult {
   };
 }
 
+function mergeAnalysisWithLocalFallback(aiResult: AnalysisResult, notes: string): AnalysisResult {
+  const localResult = localAnalyzeNotes(notes);
+  const mergedConcepts = [...aiResult.concepts];
+  const seenTopics = new Set(mergedConcepts.map((concept) => concept.topic.toLowerCase()));
+
+  for (const concept of localResult.concepts) {
+    if (mergedConcepts.length >= 8) break;
+    if (seenTopics.has(concept.topic.toLowerCase())) continue;
+    mergedConcepts.push(concept);
+    seenTopics.add(concept.topic.toLowerCase());
+  }
+
+  return {
+    title: aiResult.title?.trim() ? aiResult.title : localResult.title,
+    concepts: mergedConcepts.slice(0, 8),
+    questions: aiResult.questions.length >= 5 ? aiResult.questions.slice(0, 5) : localResult.questions,
+  };
+}
+
 function localExplainConcept(topic: string, context?: string) {
   const contextSentence = context?.trim()
     ? ` In this lecture, it connects to: ${context.trim().slice(0, 240)}.`
@@ -173,7 +192,7 @@ async function runWithFallback<T>(operation: () => Promise<T>, fallback: () => T
 export const analyzeNotes = createServerFn({ method: "POST" })
   .inputValidator((d: { notes: string }) => z.object({ notes: z.string().min(20).max(40000) }).parse(d))
   .handler(async ({ data }): Promise<AnalysisResult> => {
-    return runWithFallback(
+    const aiResult = await runWithFallback(
       () =>
         callGatewayJSON<AnalysisResult>(
           [
@@ -231,6 +250,8 @@ export const analyzeNotes = createServerFn({ method: "POST" })
         ),
       () => localAnalyzeNotes(data.notes),
     );
+
+    return aiResult.concepts.length >= 6 ? aiResult : mergeAnalysisWithLocalFallback(aiResult, data.notes);
   });
 
 // 2. Explain a concept like a teacher
